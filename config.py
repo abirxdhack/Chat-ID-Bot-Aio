@@ -1,0 +1,1 @@
+BOT_TOKEN = "800xxxxwowmU"  # Replace this BOT_TOKEN
