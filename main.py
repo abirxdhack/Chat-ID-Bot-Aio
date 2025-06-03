@@ -5,23 +5,36 @@ from aiogram.filters import Command
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, KeyboardButtonRequestUsers, KeyboardButtonRequestChat
 from config import BOT_TOKEN
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Mapping of request IDs to types and effect IDs
+TYPES = {
+    1: {'name': 'User', 'effect_id': '5107584321108051014'},  # 👍 Thumbs Up
+    2: {'name': 'Private Channel', 'effect_id': '5046589136895476101'},  # 💩 Poop
+    3: {'name': 'Public Channel', 'effect_id': '5104841245755180586'},  # 🔥 Fire
+    4: {'name': 'Private Group', 'effect_id': '5104858069142078462'},  # 👎 Thumbs Down
+    5: {'name': 'Public Group', 'effect_id': '5046509860389126442'},  # 🎉 Confetti
+    6: {'name': 'Bot', 'effect_id': '5046509860389126442'},  # 🎉 Confetti
+    7: {'name': 'Premium User', 'effect_id': '5046509860389126442'}  # 🎉 Confetti
+}
+
+# Message effect ID for the /start command
+START_EFFECT_ID = "5104841245755180586"  # 🔥 Fire
+
+# Effect ID for forwarded messages
+FORWARD_EFFECT_ID = "5046509860389126442"  # 🎉 Confetti
+
+# Set up logging to console and file
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('error.log'),
+        logging.StreamHandler()
+    ]
+)
 
 # Initialize bot and dispatcher
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-
-# Define the types mapping for shared peers
-types = {
-    1: 'User',
-    2: 'Private Channel',
-    3: 'Public Channel',
-    4: 'Private Group',
-    5: 'Public Group',
-    6: 'Bot',
-    7: 'Premium User'
-}
 
 # Define the custom keyboard buttons
 button_user = KeyboardButton(
@@ -82,32 +95,84 @@ welcome_text = (
 @dp.message(Command("start"))
 async def start_command(message: Message):
     logging.info("Processing /start command")
-    await message.answer(welcome_text, parse_mode="HTML", reply_markup=keyboard)
-    logging.info("Sent welcome message with keyboard")
+    try:
+        await message.answer(
+            welcome_text,
+            parse_mode="HTML",
+            reply_markup=keyboard,
+            disable_web_page_preview=True,
+            message_effect_id=START_EFFECT_ID
+        )
+        logging.info("Sent welcome message with keyboard and fire effect")
+    except Exception as e:
+        logging.error(f"Failed to send welcome message: {str(e)}")
+        # Retry without effect
+        await message.answer(
+            welcome_text,
+            parse_mode="HTML",
+            reply_markup=keyboard,
+            disable_web_page_preview=True
+        )
+        logging.info("Retried welcome message without effect")
 
 # Handler for shared users (e.g., User, Bot, Premium User)
 @dp.message(lambda message: message.users_shared is not None)
 async def handle_users_shared(message: Message):
     users_shared = message.users_shared
     request_id = users_shared.request_id
-    type_ = types.get(request_id, 'Unknown')
+    type_info = TYPES.get(request_id, {'name': 'Unknown', 'effect_id': None})
+    type_ = type_info['name']
+    effect_id = type_info['effect_id']
     user_ids = [user.user_id for user in users_shared.users]
+    if not user_ids:
+        response = f"⚠️ <b>Error:</b> No {type_} ID received."
+        await message.answer(response, parse_mode="HTML")
+        logging.error(f"No user IDs in users_shared: {users_shared}")
+        return
     response = f"👤 <b>Shared {type_} Info</b>\n"
     for user_id in user_ids:
         response += f"🆔 ID: <code>{user_id}</code>\n"
-    await message.answer(response, parse_mode="HTML")
-    logging.info(f"Sent response: {response}")
+    try:
+        await message.answer(
+            response,
+            parse_mode="HTML",
+            message_effect_id=effect_id
+        )
+        logging.info(f"Sent response: {response}")
+    except Exception as e:
+        logging.error(f"Failed to send user shared response: {str(e)}")
+        # Retry without effect
+        await message.answer(
+            response,
+            parse_mode="HTML"
+        )
+        logging.info(f"Retried user shared response without effect: {response}")
 
 # Handler for shared chats (e.g., Channels, Groups)
 @dp.message(lambda message: message.chat_shared is not None)
 async def handle_chat_shared(message: Message):
     chat_shared = message.chat_shared
     request_id = chat_shared.request_id
-    type_ = types.get(request_id, 'Unknown')
+    type_info = TYPES.get(request_id, {'name': 'Unknown', 'effect_id': None})
+    type_ = type_info['name']
+    effect_id = type_info['effect_id']
     chat_id = chat_shared.chat_id
     response = f"💬 <b>Shared {type_} Info</b>\n🆔 ID: <code>{chat_id}</code>"
-    await message.answer(response, parse_mode="HTML")
-    logging.info(f"Sent response: {response}")
+    try:
+        await message.answer(
+            response,
+            parse_mode="HTML",
+            message_effect_id=effect_id
+        )
+        logging.info(f"Sent response: {response}")
+    except Exception as e:
+        logging.error(f"Failed to send chat shared response: {str(e)}")
+        # Retry without effect
+        await message.answer(
+            response,
+            parse_mode="HTML"
+        )
+        logging.info(f"Retried chat shared response without effect: {response}")
 
 # Handler for forwarded messages
 @dp.message(lambda message: message.forward_date is not None)
@@ -134,8 +199,21 @@ async def handle_forwarded_message(message: Message):
     else:
         response = "<b>Sorry Bro, Forward Method Not Support For Private Things</b>"
 
-    await message.answer(response, parse_mode="HTML")
-    logging.info(f"Sent response: {response}")
+    try:
+        await message.answer(
+            response,
+            parse_mode="HTML",
+            message_effect_id=FORWARD_EFFECT_ID
+        )
+        logging.info(f"Sent response: {response}")
+    except Exception as e:
+        logging.error(f"Failed to send forwarded message response: {str(e)}")
+        # Retry without effect
+        await message.answer(
+            response,
+            parse_mode="HTML"
+        )
+        logging.info(f"Retried forwarded message response without effect: {response}")
 
 # Main function to start the bot
 async def main():
